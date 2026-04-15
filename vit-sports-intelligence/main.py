@@ -1,4 +1,4 @@
-# main.py — VIT Sports Intelligence Network v3.0.0
+# main.py — VIT Sports Intelligence Network v3.1.0
 # Refactored to use dependency injection for core services.
 
 import asyncio
