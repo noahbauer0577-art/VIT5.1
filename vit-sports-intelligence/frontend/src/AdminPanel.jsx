@@ -876,10 +876,10 @@ export default function AdminPanel({ apiKey }) {
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 16px', marginBottom: 14, fontSize: '0.82rem', color: '#475569' }}>
           <strong>Expected zip contents:</strong>
           <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {['poisson_model.pkl','xgboost_model.pkl','lstm_model.pkl','monte_carlo_model.pkl',
-              'ensemble_model.pkl','transformer_model.pkl','gnn_model.pkl','bayesian_model.pkl',
-              'rl_agent_model.pkl','causal_model.pkl','sentiment_model.pkl','anomaly_model.pkl',
-              'historical_matches.json'].map(f => (
+            {['logistic_v1.pkl','rf_v1.pkl','xgb_v1.pkl','poisson_v1.pkl',
+              'elo_v1.pkl','dixon_coles_v1.pkl','lstm_v1.pkl','transformer_v1.pkl',
+              'ensemble_v1.pkl','market_v1.pkl','bayes_v1.pkl','hybrid_v1.pkl',
+              'training_metrics.json'].map(f => (
               <span key={f} style={{ background: '#e0f2fe', color: '#0369a1', borderRadius: 4, padding: '1px 7px', fontSize: '0.75rem', fontFamily: 'monospace' }}>{f}</span>
             ))}
           </div>

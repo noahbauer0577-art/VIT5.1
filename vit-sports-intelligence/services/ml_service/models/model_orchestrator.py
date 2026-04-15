@@ -603,32 +603,46 @@ class ModelOrchestrator:
 
         for key, name, markets, sigma, market_trust in _MODEL_SPECS:
             pkl_path = os.path.join(models_dir, f"{key}.pkl")
-            loaded, model_obj = False, None
 
+            # Always create the proper algorithmic model class first
+            cls = _MODEL_CLASS_MAP.get(key, _BaseModel)
+            model_obj = cls(key, markets, sigma, market_trust)
+
+            # If a trained pkl exists, attach the sklearn model to the instance
+            loaded = False
             if os.path.exists(pkl_path):
                 try:
-                    import pickle
-                    with open(pkl_path, "rb") as f:
-                        model_obj = pickle.load(f)
-                    loaded = True
-                    logger.info(f"Loaded model weights: {key}")
+                    import joblib
+                    payload = joblib.load(pkl_path)
+                    if isinstance(payload, dict) and "model" in payload:
+                        model_obj._sklearn_model    = payload["model"]
+                        model_obj._sklearn_scaler   = payload.get("scaler")
+                        model_obj._sklearn_features = payload.get("feature_columns", [])
+                        model_obj._sklearn_version  = payload.get("version", "?")
+                        model_obj.is_trained        = True
+                        model_obj.trained_matches_count = payload.get("training_samples", 1)
+                        loaded = True
+                        logger.info(
+                            f"✅ Loaded real weights for {key} "
+                            f"(acc={payload.get('metrics',{}).get('accuracy','?')}, "
+                            f"samples={payload.get('training_samples','?')})"
+                        )
+                    else:
+                        logger.warning(f"Unexpected pkl format for {key} — using algorithmic model")
                 except Exception as exc:
                     logger.warning(f"Failed to load {key}.pkl: {exc}")
 
-            if model_obj is None:
-                cls = _MODEL_CLASS_MAP.get(key, _BaseModel)
-                model_obj = cls(key, markets, sigma, market_trust)
-
             self._pkl_loaded[key] = loaded
+            # Real-weights models get 2× vote weight in the ensemble
             weight = 2.0 if loaded else 1.0
 
-            self.models[key] = model_obj
+            self.models[key]    = model_obj
             self.model_meta[key] = {
                 "model_name":        name,
                 "model_type":        name,
                 "weight":            weight,
                 "child_models":      [],
-                "description":       f"{name} model (v3)",
+                "description":       f"{name} model (v3.1{'+ real weights' if loaded else ''})",
                 "supported_markets": markets,
                 "pkl_loaded":        loaded,
             }
@@ -637,9 +651,59 @@ class ModelOrchestrator:
         n_pkl = sum(self._pkl_loaded.values())
         logger.info(
             f"Orchestrator ready: {len(self.models)}/{_TOTAL_MODEL_SPECS} models "
-            f"({n_pkl} with real weights)"
+            f"({n_pkl} with real trained weights)"
         )
         return results
+
+    def _sklearn_predict(self, model_obj, lam_h: float, lam_a: float,
+                         base_hp: float, base_dp: float, base_ap: float
+                         ) -> Optional[Tuple[float, float, float]]:
+        """
+        Run the attached sklearn model using available prediction-time features.
+        Missing rolling-form and H2H features default to global averages.
+        Returns (home_prob, draw_prob, away_prob) or None on failure.
+        """
+        sk_model   = getattr(model_obj, "_sklearn_model",    None)
+        sk_scaler  = getattr(model_obj, "_sklearn_scaler",   None)
+        sk_features = getattr(model_obj, "_sklearn_features", [])
+
+        if sk_model is None:
+            return None
+
+        # Build feature vector using available data; default neutral for unknowns
+        feature_map = {
+            "home_form_pts_5":   1.0,   "away_form_pts_5":   1.0,
+            "home_form_pts_10":  1.0,   "away_form_pts_10":  1.0,
+            "home_gf_pg_5":      1.35,  "away_gf_pg_5":      1.05,
+            "home_ga_pg_5":      1.05,  "away_ga_pg_5":      1.35,
+            "home_gf_pg_10":     1.35,  "away_gf_pg_10":     1.05,
+            "home_ga_pg_10":     1.05,  "away_ga_pg_10":     1.35,
+            "h2h_home_win_pct":  base_hp,
+            "h2h_draw_pct":      base_dp,
+            "h2h_away_win_pct":  base_ap,
+            "h2h_home_goals_pg": 1.35,
+            "h2h_away_goals_pg": 1.05,
+            "home_adv_league":   0.45,
+            "elo_diff":          (lam_h - lam_a) * 80.0,   # proxy from xG diff
+            "lambda_home_est":   lam_h,
+            "lambda_away_est":   lam_a,
+        }
+
+        try:
+            import numpy as np
+            cols = sk_features if sk_features else list(feature_map.keys())
+            vec  = np.array([[feature_map.get(c, 0.0) for c in cols]], dtype=float)
+
+            if sk_scaler is not None:
+                vec = sk_scaler.transform(vec)
+
+            proba = sk_model.predict_proba(vec)[0]
+            # proba order: [home(0), draw(1), away(2)]
+            hp, dp, ap = float(proba[0]), float(proba[1]), float(proba[2])
+            return _normalise(hp, dp, ap)
+        except Exception as exc:
+            logger.debug(f"sklearn predict failed for {model_obj.key}: {exc}")
+            return None
 
     def num_models_ready(self) -> int:
         return len(self.models)
@@ -716,6 +780,17 @@ class ModelOrchestrator:
                     {"home": h_raw, "draw": d_raw, "away": a_raw},
                     seed,
                 )
+
+                # If this model has real trained weights, blend sklearn output
+                # with algorithmic output (50/50 blend — both signals matter)
+                sk_result = self._sklearn_predict(
+                    model, lam_h, lam_a, base_hp, base_dp, base_ap
+                )
+                if sk_result is not None:
+                    sk_hp, sk_dp, sk_ap = sk_result
+                    hp = 0.50 * hp + 0.50 * sk_hp
+                    dp = 0.50 * dp + 0.50 * sk_dp
+                    ap = 0.50 * ap + 0.50 * sk_ap
             except Exception as exc:
                 logger.warning(f"Model {key} prediction failed: {exc}")
                 hp, dp, ap = base_hp, base_dp, base_ap
