@@ -568,8 +568,8 @@ async def upload_model_weights(
                     saved_models.append(basename)
                     logger.info(f"📦 Saved model weight: {basename}")
 
-                # historical_matches.json → data/
-                elif basename == "historical_matches.json":
+                # training data/metrics → data/
+                elif basename in {"historical_matches.json", "training_metrics.json"}:
                     dest = os.path.join(DATA_DIR, basename)
                     with zf.open(member) as src, open(dest, "wb") as dst:
                         shutil.copyfileobj(src, dst)

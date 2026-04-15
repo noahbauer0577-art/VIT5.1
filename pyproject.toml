@@ -20,7 +20,7 @@ dependencies = [
     "python-dotenv==1.0.1",
     "python-multipart==0.0.20",
     "redis==5.2.1",
-    "scikit-learn==1.6.0",
+    "scikit-learn==1.6.1",
     "sqlalchemy[asyncio]==2.0.36",
     "tenacity==9.0.0",
     "uvicorn[standard]==0.34.0",

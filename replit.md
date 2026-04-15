@@ -38,6 +38,12 @@ Located in `vit-sports-intelligence/`. A full-stack football prediction platform
 - Backend workflow: "VIT Backend" (port 8000)
 - Frontend workflow: "Start application" (port 5000, webview)
 
+### Model Weights
+
+- Uploaded/trained model weights live in `vit-sports-intelligence/models/` as 12 `.pkl` files.
+- `vit_models.zip` was extracted into the model directory; `training_metrics.json` is stored in `vit-sports-intelligence/data/`.
+- Runtime scikit-learn is pinned to `1.6.1` to match the uploaded trained model files.
+
 ### Key Python Dependencies
 
 fastapi, uvicorn, SQLAlchemy, aiosqlite, alembic, pydantic, scikit-learn, pandas, numpy, httpx

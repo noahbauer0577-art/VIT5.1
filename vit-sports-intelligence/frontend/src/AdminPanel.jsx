@@ -631,7 +631,7 @@ export default function AdminPanel({ apiKey }) {
                 </tr>
               </thead>
               <tbody>
-                {models.models?.map(m => <ModelRow key={m.name} model={m} />)}
+                {models.models?.map(m => <ModelRow key={m.key || m.model_name} model={m} />)}
               </tbody>
             </table>
           </div>
