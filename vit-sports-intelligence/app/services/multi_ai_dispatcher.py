@@ -82,10 +82,22 @@ async def run_multi_ai(
         confidence=float(pred.confidence) if pred and pred.confidence else 0.5,
     )
 
-    tasks = [_call_provider(s, kwargs) for s in sources]
-    results_list = await asyncio.gather(*tasks, return_exceptions=False)
+    from app.services.insight_store import load_match_insights
 
-    results = {r["source"]: r for r in results_list}
+    defaults = {
+        "home_prob": kwargs["home_prob"],
+        "draw_prob": kwargs["draw_prob"],
+        "away_prob": kwargs["away_prob"],
+        "confidence": kwargs["confidence"],
+    }
+    cached = load_match_insights(match_id, defaults=defaults)
+    results = {source: cached[source] for source in sources if source in cached}
+    missing_sources = [source for source in sources if source not in results]
+
+    if missing_sources:
+        tasks = [_call_provider(s, kwargs) for s in missing_sources]
+        results_list = await asyncio.gather(*tasks, return_exceptions=False)
+        results.update({r["source"]: r for r in results_list})
 
     # Ingest probability outputs into AIPrediction table
     for source, r in results.items():
@@ -108,5 +120,6 @@ async def run_multi_ai(
     return {
         "match_id": match_id,
         "sources_requested": sources,
+        "cache_hits": sorted([source for source, result in results.items() if result.get("from_cache")]),
         "results": results,
     }

@@ -8,16 +8,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 API_KEY = os.getenv("API_KEY", "")
-_auth_env = os.getenv("AUTH_ENABLED", "").lower()
-# Auto-enable auth when a real API key has been configured and AUTH_ENABLED is not
-# explicitly set to "false"
-if _auth_env == "true":
-    AUTH_ENABLED = True
-elif _auth_env == "false":
-    AUTH_ENABLED = False
-else:
-    # Auto-detect: enable if the key is non-default
-    AUTH_ENABLED = API_KEY not in ("", "your_api_key_here")
+
+
+def auth_enabled() -> bool:
+    api_key = os.getenv("API_KEY", "")
+    auth_env = os.getenv("AUTH_ENABLED", "").lower()
+    if auth_env == "true":
+        return True
+    if auth_env == "false":
+        return False
+    return api_key not in ("", "your_api_key_here")
 
 # Only enforce auth on these API route prefixes — everything else is static frontend
 _PROTECTED_PREFIXES = (
@@ -33,7 +33,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next):
-        if not AUTH_ENABLED:
+        if not auth_enabled():
             return await call_next(request)
 
         path = request.url.path
@@ -66,7 +66,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
 
 async def verify_api_key(request: Request):
     """Dependency for route-level API key validation"""
-    if not AUTH_ENABLED:
+    if not auth_enabled():
         return True
 
     api_key = request.headers.get("x-api-key")

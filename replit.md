@@ -43,6 +43,8 @@ Located in `vit-sports-intelligence/`. A full-stack football prediction platform
 - Uploaded/trained model weights live in `vit-sports-intelligence/models/` as 12 `.pkl` files.
 - `vit_models.zip` was extracted into the model directory; `training_metrics.json` is stored in `vit-sports-intelligence/data/`.
 - Runtime scikit-learn is pinned to `1.6.1` to match the uploaded trained model files.
+- Bootstrap training dataset stats count uploaded `.pkl` training samples as historical training priors when `historical_matches.json` is not present.
+- Match-level AI agent insights can be uploaded as JSON and are stored under `vit-sports-intelligence/data/insights/`; cached JSON is used before Gemini/Claude/Grok API calls.
 
 ### Key Python Dependencies
 

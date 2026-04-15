@@ -9,6 +9,7 @@ import {
   addManualMatch,
   uploadCSVFixtures,
   uploadModelWeights,
+  uploadMatchInsights,
   clearHistory,
   fetchFixturesByDate,
   fetchApiKeys,
@@ -132,6 +133,11 @@ export default function AdminPanel({ apiKey }) {
   const [manualResult, setManualResult] = useState(null)
   const [manualLoading, setManualLoad]  = useState(false)
   const [manualError, setManualError]   = useState('')
+  const [insightJson, setInsightJson] = useState(null)
+  const [insightUploadResult, setInsightUploadResult] = useState(null)
+  const [insightUploading, setInsightUploading] = useState(false)
+  const [insightUploadError, setInsightUploadError] = useState('')
+  const insightFileRef = useRef(null)
 
   // Model weights upload
   const [modelZip, setModelZip]         = useState(null)
@@ -274,7 +280,7 @@ export default function AdminPanel({ apiKey }) {
   function updateManual(k, v) { setManualForm(f => ({ ...f, [k]: v })) }
 
   async function submitManualMatch() {
-    setManualLoad(true); setManualError(''); setManualResult(null)
+    setManualLoad(true); setManualError(''); setManualResult(null); setInsightUploadResult(null); setInsightUploadError('')
     try {
       const r = await addManualMatch(key, {
         home_team:    manualForm.home_team.trim(),
@@ -288,6 +294,20 @@ export default function AdminPanel({ apiKey }) {
       setManualResult(r)
     } catch (e) { setManualError(e.message) }
     finally { setManualLoad(false) }
+  }
+
+  async function submitInsightUpload() {
+    if (!insightJson || !manualResult?.match_id) return
+    setInsightUploading(true); setInsightUploadError(''); setInsightUploadResult(null)
+    try {
+      setInsightUploadResult(await uploadMatchInsights(key, manualResult.match_id, insightJson))
+      setInsightJson(null)
+      if (insightFileRef.current) insightFileRef.current.value = ''
+    } catch (e) {
+      setInsightUploadError(e.message)
+    } finally {
+      setInsightUploading(false)
+    }
   }
 
   async function submitModelUpload() {
@@ -875,6 +895,9 @@ export default function AdminPanel({ apiKey }) {
         {manualResult && (
           <div style={{ marginTop: 16, background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 10, padding: '14px 18px' }}>
             <div style={{ fontWeight: 700, marginBottom: 8, color: '#15803d' }}>✅ Prediction complete</div>
+            <div style={{ fontSize: '0.82rem', color: '#166534', marginBottom: 8 }}>
+              Saved as match #{manualResult.match_id || '—'} so AI-agent insight JSON can be attached.
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, fontSize: '0.88rem' }}>
               {[
                 ['Home Win', `${((manualResult.predictions?.home_prob || 0) * 100).toFixed(1)}%`],
@@ -887,6 +910,24 @@ export default function AdminPanel({ apiKey }) {
                 <div key={l}><span style={{ color: '#64748b' }}>{l}: </span><strong>{v}</strong></div>
               ))}
             </div>
+            {manualResult.match_id && (
+              <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #bbf7d0' }}>
+                <label style={{ ...labelStyle, color: '#166534' }}>Upload AI Agent Insights JSON for this match</label>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <input ref={insightFileRef} type="file" accept=".json,application/json" onChange={e => setInsightJson(e.target.files?.[0] || null)} />
+                  <button style={btnSecondary} onClick={submitInsightUpload} disabled={!insightJson || insightUploading}>
+                    {insightUploading ? 'Uploading…' : 'Upload Insights'}
+                  </button>
+                </div>
+                <div style={{ marginTop: 6, fontSize: '0.76rem', color: '#15803d' }}>
+                  Supports provider blocks named <code>gemini</code>, <code>claude</code>, and <code>grok</code>. Uploaded data is used before API keys.
+                </div>
+                {insightUploadError && <div style={{ marginTop: 8, color: '#b91c1c', fontSize: '0.8rem' }}>{insightUploadError}</div>}
+                {insightUploadResult && <div style={{ marginTop: 8, color: '#166534', fontSize: '0.8rem' }}>
+                  Insight file saved for {insightUploadResult.sources?.join(', ') || 'agents'}.
+                </div>}
+              </div>
+            )}
           </div>
         )}
       </div>

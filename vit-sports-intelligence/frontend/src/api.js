@@ -115,6 +115,18 @@ export async function uploadModelWeights(apiKey, file) {
   return res.json()
 }
 
+export async function uploadMatchInsights(apiKey, matchId, file) {
+  const formData = new FormData()
+  formData.append('match_id', String(matchId))
+  formData.append('file', file)
+  const res = await fetch(
+    `${API_BASE_URL}/admin/upload/insights`,
+    { method: 'POST', headers: apiKey ? { 'x-api-key': apiKey } : {}, body: formData }
+  )
+  if (!res.ok) throw new Error(await res.text() || 'Insight upload failed')
+  return res.json()
+}
+
 // ── Admin — Accumulator ────────────────────────────────────────────────────
 export async function fetchAccumulatorCandidates(apiKey, { minConfidence = 0.60, minEdge = 0.01, count = 15 } = {}) {
   return apiFetch(
