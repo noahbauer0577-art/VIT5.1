@@ -45,6 +45,7 @@ Located in `vit-sports-intelligence/`. A full-stack football prediction platform
 - Runtime scikit-learn is pinned to `1.6.1` to match the uploaded trained model files.
 - Bootstrap training dataset stats count uploaded `.pkl` training samples as historical training priors when `historical_matches.json` is not present.
 - Match-level AI agent insights can be uploaded as JSON and are stored under `vit-sports-intelligence/data/insights/`; cached JSON is used before Gemini/Claude/Grok API calls.
+- The frontend exposes manual insight upload both in the Admin panel by match ID and directly inside each Match Detail AI Agent Insights section.
 
 ### Key Python Dependencies
 

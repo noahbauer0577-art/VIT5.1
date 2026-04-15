@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchMatchDetail, fetchMultiAIInsights } from './api'
+import { fetchMatchDetail, fetchMultiAIInsights, uploadMatchInsights, getApiKey } from './api'
 
 const MARKET_LABELS = {
   1: '1X2',
@@ -123,6 +123,23 @@ export default function MatchDetail({ matchId, onClose }) {
   const [insights, setInsights] = useState(null)
   const [insightsLoading, setInsightsLoading] = useState(false)
   const [insightsError, setInsightsError] = useState('')
+  const [insightFile, setInsightFile] = useState(null)
+  const [insightUploadLoading, setInsightUploadLoading] = useState(false)
+  const [insightUploadError, setInsightUploadError] = useState('')
+  const [insightUploadMessage, setInsightUploadMessage] = useState('')
+
+  async function loadInsights(id) {
+    setInsightsLoading(true)
+    setInsights(null)
+    setInsightsError('')
+    try {
+      setInsights(await fetchMultiAIInsights(id))
+    } catch (e) {
+      setInsightsError(e.message)
+    } finally {
+      setInsightsLoading(false)
+    }
+  }
 
   useEffect(() => {
     setLoading(true)
@@ -135,14 +152,25 @@ export default function MatchDetail({ matchId, onClose }) {
 
   useEffect(() => {
     if (!matchId) return
-    setInsightsLoading(true)
-    setInsights(null)
-    setInsightsError('')
-    fetchMultiAIInsights(matchId)
-      .then(r => setInsights(r))
-      .catch(e => setInsightsError(e.message))
-      .finally(() => setInsightsLoading(false))
+    loadInsights(matchId)
   }, [matchId])
+
+  async function handleInsightUpload() {
+    if (!insightFile || !matchId) return
+    setInsightUploadLoading(true)
+    setInsightUploadError('')
+    setInsightUploadMessage('')
+    try {
+      const result = await uploadMatchInsights(getApiKey(), matchId, insightFile)
+      setInsightFile(null)
+      setInsightUploadMessage(`Uploaded JSON insights for ${result.sources?.join(', ') || 'AI agents'}.`)
+      await loadInsights(matchId)
+    } catch (e) {
+      setInsightUploadError(e.message)
+    } finally {
+      setInsightUploadLoading(false)
+    }
+  }
 
   if (loading) return (
     <div className="detail-overlay" onClick={onClose}>
@@ -413,6 +441,46 @@ export default function MatchDetail({ matchId, onClose }) {
                 {aiResults[0].risk_level} RISK
               </span>
             )}
+          </div>
+
+          <div style={{
+            marginBottom: 14, padding: '12px 14px', borderRadius: 12,
+            background: '#02061766', border: '1px dashed #6366f1',
+          }}>
+            <div style={{ color: '#c7d2fe', fontSize: '0.82rem', fontWeight: 700, marginBottom: 6 }}>
+              Add manual AI insight JSON for match #{matchId}
+            </div>
+            <div style={{ color: '#94a3b8', fontSize: '0.76rem', lineHeight: 1.45, marginBottom: 10 }}>
+              Use this when API agents are unavailable. The uploaded JSON is saved and used before Gemini, Claude, or Grok API calls.
+            </div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              <input
+                type="file"
+                accept=".json,application/json"
+                onChange={e => {
+                  setInsightFile(e.target.files?.[0] || null)
+                  setInsightUploadError('')
+                  setInsightUploadMessage('')
+                }}
+                style={{ color: '#c7d2fe', fontSize: '0.8rem' }}
+              />
+              <button
+                onClick={handleInsightUpload}
+                disabled={!insightFile || insightUploadLoading}
+                style={{
+                  background: insightFile ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : '#334155',
+                  color: '#fff', border: 'none', borderRadius: 8, padding: '9px 12px',
+                  fontWeight: 700, fontSize: '0.82rem',
+                }}
+              >
+                {insightUploadLoading ? 'Uploading insights…' : 'Upload Manual Insights JSON'}
+              </button>
+            </div>
+            <div style={{ color: '#64748b', fontSize: '0.72rem', marginTop: 8 }}>
+              JSON format: <code>{'{"insights":{"gemini":{},"claude":{},"grok":{}}}'}</code>
+            </div>
+            {insightUploadError && <div style={{ color: '#f87171', fontSize: '0.78rem', marginTop: 8 }}>{insightUploadError}</div>}
+            {insightUploadMessage && <div style={{ color: '#86efac', fontSize: '0.78rem', marginTop: 8 }}>{insightUploadMessage}</div>}
           </div>
 
           {insightsLoading && (

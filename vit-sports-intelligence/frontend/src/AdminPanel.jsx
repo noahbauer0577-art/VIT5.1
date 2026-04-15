@@ -138,6 +138,12 @@ export default function AdminPanel({ apiKey }) {
   const [insightUploading, setInsightUploading] = useState(false)
   const [insightUploadError, setInsightUploadError] = useState('')
   const insightFileRef = useRef(null)
+  const [standaloneInsightMatchId, setStandaloneInsightMatchId] = useState('')
+  const [standaloneInsightFile, setStandaloneInsightFile] = useState(null)
+  const [standaloneInsightUploading, setStandaloneInsightUploading] = useState(false)
+  const [standaloneInsightResult, setStandaloneInsightResult] = useState(null)
+  const [standaloneInsightError, setStandaloneInsightError] = useState('')
+  const standaloneInsightRef = useRef(null)
 
   // Model weights upload
   const [modelZip, setModelZip]         = useState(null)
@@ -307,6 +313,22 @@ export default function AdminPanel({ apiKey }) {
       setInsightUploadError(e.message)
     } finally {
       setInsightUploading(false)
+    }
+  }
+
+  async function submitStandaloneInsightUpload() {
+    const matchId = parseInt(standaloneInsightMatchId, 10)
+    if (!standaloneInsightFile || !matchId) return
+    setStandaloneInsightUploading(true); setStandaloneInsightError(''); setStandaloneInsightResult(null)
+    try {
+      const result = await uploadMatchInsights(key, matchId, standaloneInsightFile)
+      setStandaloneInsightResult(result)
+      setStandaloneInsightFile(null)
+      if (standaloneInsightRef.current) standaloneInsightRef.current.value = ''
+    } catch (e) {
+      setStandaloneInsightError(e.message)
+    } finally {
+      setStandaloneInsightUploading(false)
     }
   }
 
@@ -845,6 +867,60 @@ export default function AdminPanel({ apiKey }) {
         )}
         {!decisionLog && !decisionLoading && !decisionError && (
           <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Click Load to view logged prediction decisions.</p>
+        )}
+      </div>
+
+      <div style={card}>
+        <h3 style={sectionTitle}>✨ Manual AI Agent Insights Upload</h3>
+        <p style={{ color: '#64748b', fontSize: '0.85rem', marginTop: -8, marginBottom: 16 }}>
+          Attach real AI analysis to any existing match when Gemini, Claude, or Grok API calls are unavailable.
+          The uploaded JSON will be used before API keys.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 180px) 1fr', gap: 12, alignItems: 'end' }}>
+          <div>
+            <label style={labelStyle}>Match ID</label>
+            <input
+              style={inputStyle}
+              type="number"
+              min="1"
+              placeholder="e.g. 27"
+              value={standaloneInsightMatchId}
+              onChange={e => setStandaloneInsightMatchId(e.target.value)}
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Insight JSON File</label>
+            <input
+              ref={standaloneInsightRef}
+              type="file"
+              accept=".json,application/json"
+              onChange={e => {
+                setStandaloneInsightFile(e.target.files?.[0] || null)
+                setStandaloneInsightError('')
+                setStandaloneInsightResult(null)
+              }}
+            />
+          </div>
+        </div>
+
+        <div style={{ marginTop: 10, padding: '10px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: '0.78rem', color: '#475569' }}>
+          Expected format: <code>{'{"insights":{"gemini":{"summary":"..."},"claude":{"summary":"..."},"grok":{"summary":"..."}}}'}</code>
+        </div>
+
+        <button
+          style={{ ...btnPrimary, marginTop: 14 }}
+          onClick={submitStandaloneInsightUpload}
+          disabled={!standaloneInsightFile || !standaloneInsightMatchId || standaloneInsightUploading}
+        >
+          {standaloneInsightUploading ? 'Uploading insights…' : 'Upload AI Insights to Match'}
+        </button>
+
+        {standaloneInsightError && <div style={{ marginTop: 10, color: '#b91c1c', fontSize: '0.82rem' }}>{standaloneInsightError}</div>}
+        {standaloneInsightResult && (
+          <div style={{ marginTop: 10, color: '#166534', fontSize: '0.82rem' }}>
+            Saved insights for match #{standaloneInsightResult.match_id}: {standaloneInsightResult.sources?.join(', ')}
+          </div>
         )}
       </div>
 
