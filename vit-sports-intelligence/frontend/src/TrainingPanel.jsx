@@ -57,7 +57,7 @@ function SimulationPanel({ apiKey }) {
   const [err, setErr] = useState('')
   const pollRef = useRef(null)
 
-  useEffect(() => { loadJobs() }, [])
+  useEffect(() => { if (apiKey) loadJobs() }, [apiKey])
 
   async function loadJobs() {
     try {
@@ -225,7 +225,7 @@ function BootstrapPanel({ apiKey, onJobStarted }) {
   const [err, setErr] = useState('')
   const [dataStats, setDataStats] = useState(null)
 
-  useEffect(() => { loadDataStats() }, [])
+  useEffect(() => { if (apiKey) loadDataStats() }, [apiKey])
 
   async function loadDataStats() {
     try {
@@ -388,7 +388,7 @@ function EdgeMemoryPanel({ apiKey }) {
   const [minSample, setMinSample] = useState(30)
   const [decaying, setDecaying] = useState(false)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { if (apiKey) load() }, [apiKey])
 
   async function load() {
     setLoading(true); setErr('')
@@ -565,7 +565,10 @@ export default function TrainingPanel({ apiKey }) {
   const [promoting, setPromoting] = useState(false)
   const [promoteMsg, setPromoteMsg] = useState('')
 
-  useEffect(() => { loadJobs(); loadModelsInfo(); return () => esRef.current?.close() }, [])
+  useEffect(() => {
+    if (apiKey) { loadJobs(); loadModelsInfo() }
+    return () => esRef.current?.close()
+  }, [apiKey])
   useEffect(() => { logRef.current?.scrollIntoView({ behavior:'smooth' }) }, [events])
 
   async function loadModelsInfo() {

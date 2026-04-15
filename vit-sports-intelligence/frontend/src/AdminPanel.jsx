@@ -17,6 +17,7 @@ import {
   fetchBankroll,
   fetchDecisionLog,
   API_KEY,
+  getApiKey,
 } from './api'
 
 const LEAGUE_OPTIONS = [
@@ -79,7 +80,7 @@ function ModelRow({ model }) {
   const isReady = model.status === 'ready'
   return (
     <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
-      <td style={{ padding: '8px 12px', fontWeight: 600, fontSize: '0.88rem' }}>{model.name}</td>
+      <td style={{ padding: '8px 12px', fontWeight: 600, fontSize: '0.88rem' }}>{model.model_name || model.name}</td>
       <td style={{ padding: '8px 12px', color: '#64748b', fontSize: '0.82rem' }}>{model.model_type}</td>
       <td style={{ padding: '8px 12px' }}>
         <span style={badge(isReady ? 'green' : 'red')}>
@@ -109,7 +110,7 @@ function CsvResultRow({ r }) {
 
 // ── Main Component ────────────────────────────────────────────────────
 export default function AdminPanel({ apiKey }) {
-  const key = apiKey || API_KEY
+  const key = apiKey || getApiKey() || API_KEY
 
   // Model status
   const [models, setModels]         = useState(null)
@@ -190,6 +191,8 @@ export default function AdminPanel({ apiKey }) {
   const bottomRef                   = useRef(null)
 
   useEffect(() => {
+    if (!key) return   // no key entered — skip all requests
+
     loadModelStatus()
     loadDataSources()
     loadApiKeys()
@@ -202,7 +205,7 @@ export default function AdminPanel({ apiKey }) {
       clearInterval(modelTimer)
       esRef.current?.close()
     }
-  }, [])
+  }, [key])
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [predictions, log])
 
@@ -408,6 +411,29 @@ export default function AdminPanel({ apiKey }) {
     championship: 'Championship', eredivisie: 'Eredivisie',
     primeira_liga: 'Primeira Liga', scottish_premiership: 'Scottish Prem',
     belgian_pro_league: 'Belgian Pro',
+  }
+
+  if (!key) {
+    return (
+      <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+        <div style={{
+          ...card,
+          textAlign: 'center', padding: '40px 24px',
+          background: 'linear-gradient(135deg,#f0f9ff,#e0f2fe)',
+          border: '1px solid #bae6fd',
+        }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>🔒</div>
+          <h3 style={{ ...sectionTitle, fontSize: '1.15rem' }}>Admin Key Required</h3>
+          <p style={{ color: '#475569', fontSize: '0.9rem', maxWidth: 380, margin: '0 auto' }}>
+            Enter your admin API key in the <strong>password field at the top of the page</strong> to unlock
+            the Admin panel.
+          </p>
+          <p style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop: 12 }}>
+            Default key: <code style={{ background: '#f1f5f9', padding: '2px 8px', borderRadius: 4 }}>admin_key_change_me_in_production</code>
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (

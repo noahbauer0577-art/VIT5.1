@@ -145,12 +145,16 @@ export default function App() {
 
   useEffect(() => {
     pollHealth()
-    loadHistory()
     const id = setInterval(pollHealth, 15_000)
     return () => clearInterval(id)
   }, [])
 
-  useEffect(() => { if (tab === 'picks' && !picks) loadPicks() }, [tab])
+  // Load history only when a key is available; reload whenever key changes
+  useEffect(() => {
+    if (adminKey) loadHistory()
+  }, [adminKey])
+
+  useEffect(() => { if (tab === 'picks' && !picks && adminKey) loadPicks() }, [tab, adminKey])
 
   async function pollHealth() {
     try {

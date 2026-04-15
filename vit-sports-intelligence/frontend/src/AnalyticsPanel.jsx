@@ -85,7 +85,7 @@ export default function AnalyticsPanel({ apiKey }) {
 
   const [activeTab, setActiveTab] = useState('overview')
 
-  useEffect(() => { loadSummary() }, [])
+  useEffect(() => { if (key) loadSummary() }, [key])
 
   async function loadSummary() {
     try { setSummary(await apiFetch('/analytics/summary')) } catch(e) { console.error(e) }
