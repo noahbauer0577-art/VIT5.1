@@ -1,0 +1,16 @@
+.env
+*.db
+*.sqlite
+*.sqlite3
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+models/*.pkl
+models/*.joblib
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/package-lock.json
+.DS_Store

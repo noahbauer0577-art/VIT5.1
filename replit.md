@@ -2,7 +2,7 @@
 
 ## Overview
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+pnpm workspace monorepo using TypeScript. Also contains the VIT Sports Intelligence Network — a FastAPI + React football prediction platform.
 
 ## Stack
 
@@ -10,13 +10,39 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Node.js version**: 24
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
-- **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
+- **API framework**: Express 5 (Node) / FastAPI (Python)
+- **Database**: PostgreSQL + Drizzle ORM (Node); SQLite + SQLAlchemy (Python)
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
+- **Python version**: 3.11
 
-## Key Commands
+## VIT Sports Intelligence Network
+
+Located in `vit-sports-intelligence/`. A full-stack football prediction platform.
+
+### Structure
+
+- `vit-sports-intelligence/main.py` — FastAPI entry point
+- `vit-sports-intelligence/app/` — Application code (routes, models, services, schemas)
+- `vit-sports-intelligence/frontend/` — React + Vite frontend
+- `vit-sports-intelligence/alembic/` — Database migrations
+- `vit-sports-intelligence/services/` — ML service layer
+- `vit-sports-intelligence/.env` — Environment config (from `.env.example`)
+- `vit-sports-intelligence/vit.db` — SQLite database
+
+### Running
+
+- **Backend**: `cd vit-sports-intelligence && python -m uvicorn main:app --host 0.0.0.0 --port 8000`
+- **Frontend**: `cd vit-sports-intelligence/frontend && npm install && npm run dev`
+- Backend workflow: "VIT Backend" (port 8000)
+- Frontend workflow: "Start application" (port 5000, webview)
+
+### Key Python Dependencies
+
+fastapi, uvicorn, SQLAlchemy, aiosqlite, alembic, pydantic, scikit-learn, pandas, numpy, httpx
+
+## Key Commands (Node/pnpm workspace)
 
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
