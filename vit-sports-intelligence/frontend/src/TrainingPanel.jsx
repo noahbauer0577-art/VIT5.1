@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { API_KEY, getApiKey } from './api'
+import { useTheme } from './ThemeProvider'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -528,6 +529,7 @@ function OddsStrategyCard() {
 const TABS = ['Beast Mode', 'Training Run', 'Model Architecture', 'Compare & Promote']
 
 export default function TrainingPanel({ apiKey }) {
+  const { theme } = useTheme()
   const key = apiKey || API_KEY
   const [activeTab, setActiveTab] = useState('Beast Mode')
 
@@ -638,7 +640,12 @@ export default function TrainingPanel({ apiKey }) {
   const pct = progress.total > 0 ? Math.round(progress.current / progress.total * 100) : 0
 
   return (
-    <div style={{ maxWidth:1060, margin:'0 auto' }}>
+    <div style={{
+      maxWidth: 1200,
+      margin: '0 auto',
+      padding: '20px',
+      background: theme.bg.primary,
+    }}>
 
       {/* ── Tab navigation ────────────────────────────────────────────── */}
       <div style={{ display:'flex', gap:4, marginBottom:20, background:'#f1f5f9', borderRadius:10, padding:4, flexWrap:'wrap' }}>

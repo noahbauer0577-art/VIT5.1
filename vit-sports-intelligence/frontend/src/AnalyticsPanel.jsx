@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react'
 import { API_KEY } from './api'
+import { useTheme } from './ThemeProvider'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -71,7 +72,8 @@ function StatCard({ label, value, sub, color='#0f172a' }) {
   )
 }
 
-export default function AnalyticsPanel({ apiKey }) {
+export d{ theme } = useTheme()
+  const efault function AnalyticsPanel({ apiKey }) {
   const key = apiKey || API_KEY
 
   const [filters, setFilters] = useState({ dateFrom:'', dateTo:'', league:'' })
@@ -126,7 +128,12 @@ export default function AnalyticsPanel({ apiKey }) {
   ]
 
   return (
-    <div style={{ maxWidth:1000, margin:'0 auto' }}>
+    <div style={{
+      maxWidth: 1200,
+      margin: '0 auto',
+      padding: '20px',
+      background: theme.bg.primary,
+    }}>
 
       {/* ── Filters + Controls ────────────────────────────────── */}
       <div style={card}>
