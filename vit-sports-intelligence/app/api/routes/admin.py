@@ -27,12 +27,14 @@ from itertools import combinations
 from typing import List, Optional
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.config import get_env, APP_VERSION
+from app.db.database import AsyncSessionLocal
+from app.db.models import Match, Prediction
 from app.services.market_utils import MarketUtils
 from app.core.dependencies import get_orchestrator, get_telegram_alerts
 from app.services.results_settler import settle_results, fetch_live_matches
@@ -403,7 +405,14 @@ async def add_manual_match(body: ManualMatchRequest, api_key: Optional[str] = Qu
     }
 
     try:
-        raw   = await orchestrator.predict(features, f"manual_{body.home_team}_{body.away_team}")
+        kickoff_dt = datetime.fromisoformat(body.kickoff_time.replace("Z", "+00:00")).replace(tzinfo=None)
+    except Exception:
+        kickoff_dt = datetime.now()
+
+    request_hash = create_request_hash(body.home_team.strip(), body.away_team.strip(), body.league, kickoff_dt.isoformat())
+
+    try:
+        raw   = await orchestrator.predict(features, request_hash)
         preds = raw.get("predictions", {})
         best  = MarketUtils.determine_best_bet(
             preds.get("home_prob", 0.33),
@@ -411,8 +420,87 @@ async def add_manual_match(body: ManualMatchRequest, api_key: Optional[str] = Qu
             preds.get("away_prob", 0.33),
             body.home_odds, body.draw_odds, body.away_odds,
         )
+
+        async with AsyncSessionLocal() as db:
+            existing_pred = await db.execute(select(Prediction).where(Prediction.request_hash == request_hash))
+            existing = existing_pred.scalar_one_or_none()
+            if existing:
+                return {
+                    "status": "ok",
+                    "match_id": existing.match_id,
+                    "prediction_id": existing.id,
+                    "home_team": body.home_team,
+                    "away_team": body.away_team,
+                    "predictions": preds,
+                    "best_bet": best,
+                    "message": "Existing manual match prediction returned",
+                }
+
+            db_match = Match(
+                home_team=body.home_team.strip(),
+                away_team=body.away_team.strip(),
+                league=body.league,
+                kickoff_time=kickoff_dt,
+                opening_odds_home=body.home_odds,
+                opening_odds_draw=body.draw_odds,
+                opening_odds_away=body.away_odds,
+            )
+            db.add(db_match)
+            await db.flush()
+
+            home_prob = float(preds.get("home_prob", 0.33))
+            draw_prob = float(preds.get("draw_prob", 0.33))
+            away_prob = float(preds.get("away_prob", 0.34))
+            individual_results = raw.get("individual_results", [])
+            model_insights_payload = [
+                {
+                    "model_name": p.get("model_name"),
+                    "model_type": p.get("model_type"),
+                    "model_weight": p.get("model_weight", 1.0),
+                    "supported_markets": p.get("supported_markets", []),
+                    "home_prob": p.get("home_prob"),
+                    "draw_prob": p.get("draw_prob"),
+                    "away_prob": p.get("away_prob"),
+                    "over_2_5_prob": p.get("over_2_5_prob"),
+                    "btts_prob": p.get("btts_prob"),
+                    "confidence": p.get("confidence", {}),
+                    "latency_ms": p.get("latency_ms"),
+                    "failed": p.get("failed", False),
+                    "error": p.get("error"),
+                }
+                for p in individual_results
+            ]
+            confidence_raw = preds.get("confidence", raw.get("confidence", 0.65))
+            confidence = confidence_raw.get("1x2", 0.65) if isinstance(confidence_raw, dict) else float(confidence_raw or 0.65)
+            prediction = Prediction(
+                request_hash=request_hash,
+                match_id=db_match.id,
+                home_prob=home_prob,
+                draw_prob=draw_prob,
+                away_prob=away_prob,
+                over_25_prob=preds.get("over_25_prob") or preds.get("over_2_5_prob"),
+                under_25_prob=preds.get("under_25_prob") or preds.get("under_2_5_prob"),
+                btts_prob=preds.get("btts_prob"),
+                no_btts_prob=preds.get("no_btts_prob"),
+                consensus_prob=max(home_prob, draw_prob, away_prob),
+                final_ev=best.get("edge", 0),
+                recommended_stake=best.get("kelly_stake", 0),
+                model_weights=preds.get("model_weights", raw.get("model_weights", {})),
+                model_insights=model_insights_payload,
+                confidence=confidence,
+                bet_side=best.get("best_side"),
+                entry_odds=best.get("odds", 2.0),
+                raw_edge=best.get("raw_edge", 0),
+                normalized_edge=best.get("edge", 0),
+                vig_free_edge=best.get("edge", 0),
+            )
+            db.add(prediction)
+            await db.commit()
+
         return {
             "status":      "ok",
+            "match_id":    db_match.id,
+            "prediction_id": prediction.id,
             "home_team":   body.home_team,
             "away_team":   body.away_team,
             "predictions": preds,
@@ -421,6 +509,42 @@ async def add_manual_match(body: ManualMatchRequest, api_key: Optional[str] = Qu
     except Exception as e:
         logger.error(f"Manual match prediction failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/upload/insights")
+async def upload_match_insights(
+    api_key: Optional[str] = Query(default=None),
+    match_id: Optional[int] = Form(default=None),
+    file: UploadFile = File(...),
+):
+    _verify_key(api_key)
+    if not file.filename.lower().endswith(".json"):
+        raise HTTPException(status_code=422, detail="File must be a .json insight file")
+
+    try:
+        raw = json.loads((await file.read()).decode("utf-8"))
+        if not isinstance(raw, dict):
+            raise ValueError("Top-level JSON must be an object")
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid JSON: {exc}")
+
+    from app.services.insight_store import infer_match_id, save_match_insights
+
+    resolved_match_id = match_id or infer_match_id(raw)
+    if not resolved_match_id:
+        raise HTTPException(status_code=422, detail="match_id is required either in the form or inside the JSON")
+
+    async with AsyncSessionLocal() as db:
+        match_row = await db.execute(select(Match).where(Match.id == resolved_match_id))
+        if not match_row.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail=f"Match {resolved_match_id} not found")
+
+    try:
+        saved = save_match_insights(resolved_match_id, raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    return {"status": "ok", **saved}
 
 
 # ======================================================================
@@ -568,8 +692,8 @@ async def upload_model_weights(
                     saved_models.append(basename)
                     logger.info(f"📦 Saved model weight: {basename}")
 
-                # historical_matches.json → data/
-                elif basename == "historical_matches.json":
+                # training data/metrics → data/
+                elif basename in {"historical_matches.json", "training_metrics.json"}:
                     dest = os.path.join(DATA_DIR, basename)
                     with zf.open(member) as src, open(dest, "wb") as dst:
                         shutil.copyfileobj(src, dst)

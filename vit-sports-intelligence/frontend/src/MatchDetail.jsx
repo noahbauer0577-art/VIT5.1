@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchMatchDetail, fetchGeminiInsights } from './api'
+import { fetchMatchDetail, fetchMultiAIInsights, uploadMatchInsights, getApiKey } from './api'
 
 const MARKET_LABELS = {
   1: '1X2',
@@ -123,6 +123,23 @@ export default function MatchDetail({ matchId, onClose }) {
   const [insights, setInsights] = useState(null)
   const [insightsLoading, setInsightsLoading] = useState(false)
   const [insightsError, setInsightsError] = useState('')
+  const [insightFile, setInsightFile] = useState(null)
+  const [insightUploadLoading, setInsightUploadLoading] = useState(false)
+  const [insightUploadError, setInsightUploadError] = useState('')
+  const [insightUploadMessage, setInsightUploadMessage] = useState('')
+
+  async function loadInsights(id) {
+    setInsightsLoading(true)
+    setInsights(null)
+    setInsightsError('')
+    try {
+      setInsights(await fetchMultiAIInsights(id))
+    } catch (e) {
+      setInsightsError(e.message)
+    } finally {
+      setInsightsLoading(false)
+    }
+  }
 
   useEffect(() => {
     setLoading(true)
@@ -135,14 +152,25 @@ export default function MatchDetail({ matchId, onClose }) {
 
   useEffect(() => {
     if (!matchId) return
-    setInsightsLoading(true)
-    setInsights(null)
-    setInsightsError('')
-    fetchGeminiInsights(matchId)
-      .then(r => setInsights(r))
-      .catch(e => setInsightsError(e.message))
-      .finally(() => setInsightsLoading(false))
+    loadInsights(matchId)
   }, [matchId])
+
+  async function handleInsightUpload() {
+    if (!insightFile || !matchId) return
+    setInsightUploadLoading(true)
+    setInsightUploadError('')
+    setInsightUploadMessage('')
+    try {
+      const result = await uploadMatchInsights(getApiKey(), matchId, insightFile)
+      setInsightFile(null)
+      setInsightUploadMessage(`Uploaded JSON insights for ${result.sources?.join(', ') || 'AI agents'}.`)
+      await loadInsights(matchId)
+    } catch (e) {
+      setInsightUploadError(e.message)
+    } finally {
+      setInsightUploadLoading(false)
+    }
+  }
 
   if (loading) return (
     <div className="detail-overlay" onClick={onClose}>
@@ -174,6 +202,7 @@ export default function MatchDetail({ matchId, onClose }) {
   const modelTotal = model_summary.total_models || (model_summary.models?.length || 0)
   const modelActive = model_summary.active_models || (model_summary.models?.filter(m => !m.failed).length || 0)
   const showModelSummary = Array.isArray(model_summary.models) && model_summary.models.length > 0
+  const aiResults = insights?.results ? Object.values(insights.results) : []
 
   return (
     <div className="detail-overlay" onClick={onClose}>
@@ -385,7 +414,7 @@ export default function MatchDetail({ matchId, onClose }) {
           </div>
         )}
 
-        {/* ── Gemini AI Insights ───────────────────────────────────── */}
+        {/* ── AI Agent Insights ───────────────────────────────────── */}
         <div style={{
           margin: '20px 0 0',
           background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)',
@@ -394,19 +423,64 @@ export default function MatchDetail({ matchId, onClose }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
             <span style={{ fontSize: '1.2rem' }}>✨</span>
             <h4 style={{ margin: 0, color: '#e0e7ff', fontSize: '0.95rem', fontWeight: 700 }}>
-              Gemini AI Insights
+              AI Agent Insights
             </h4>
-            {insights?.available && insights.risk_level && (
-              <span style={{
-                marginLeft: 'auto', fontSize: '0.72rem', fontWeight: 700,
-                background: RISK_COLORS[insights.risk_level] + '22',
-                color: RISK_COLORS[insights.risk_level],
-                border: `1px solid ${RISK_COLORS[insights.risk_level]}55`,
-                borderRadius: 99, padding: '2px 10px',
-              }}>
-                {insights.risk_level} RISK
+            {insights?.cache_hits?.length > 0 && (
+              <span style={{ marginLeft: 'auto', fontSize: '0.72rem', color: '#86efac', fontWeight: 700 }}>
+                JSON: {insights.cache_hits.join(', ')}
               </span>
             )}
+            {aiResults.length === 1 && aiResults[0]?.available && aiResults[0].risk_level && (
+              <span style={{
+                marginLeft: insights?.cache_hits?.length > 0 ? 0 : 'auto', fontSize: '0.72rem', fontWeight: 700,
+                background: RISK_COLORS[aiResults[0].risk_level] + '22',
+                color: RISK_COLORS[aiResults[0].risk_level],
+                border: `1px solid ${RISK_COLORS[aiResults[0].risk_level]}55`,
+                borderRadius: 99, padding: '2px 10px',
+              }}>
+                {aiResults[0].risk_level} RISK
+              </span>
+            )}
+          </div>
+
+          <div style={{
+            marginBottom: 14, padding: '12px 14px', borderRadius: 12,
+            background: '#02061766', border: '1px dashed #6366f1',
+          }}>
+            <div style={{ color: '#c7d2fe', fontSize: '0.82rem', fontWeight: 700, marginBottom: 6 }}>
+              Add manual AI insight JSON for match #{matchId}
+            </div>
+            <div style={{ color: '#94a3b8', fontSize: '0.76rem', lineHeight: 1.45, marginBottom: 10 }}>
+              Use this when API agents are unavailable. The uploaded JSON is saved and used before Gemini, Claude, or Grok API calls.
+            </div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              <input
+                type="file"
+                accept=".json,application/json"
+                onChange={e => {
+                  setInsightFile(e.target.files?.[0] || null)
+                  setInsightUploadError('')
+                  setInsightUploadMessage('')
+                }}
+                style={{ color: '#c7d2fe', fontSize: '0.8rem' }}
+              />
+              <button
+                onClick={handleInsightUpload}
+                disabled={!insightFile || insightUploadLoading}
+                style={{
+                  background: insightFile ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : '#334155',
+                  color: '#fff', border: 'none', borderRadius: 8, padding: '9px 12px',
+                  fontWeight: 700, fontSize: '0.82rem',
+                }}
+              >
+                {insightUploadLoading ? 'Uploading insights…' : 'Upload Manual Insights JSON'}
+              </button>
+            </div>
+            <div style={{ color: '#64748b', fontSize: '0.72rem', marginTop: 8 }}>
+              JSON format: <code>{'{"insights":{"gemini":{},"claude":{},"grok":{}}}'}</code>
+            </div>
+            {insightUploadError && <div style={{ color: '#f87171', fontSize: '0.78rem', marginTop: 8 }}>{insightUploadError}</div>}
+            {insightUploadMessage && <div style={{ color: '#86efac', fontSize: '0.78rem', marginTop: 8 }}>{insightUploadMessage}</div>}
           </div>
 
           {insightsLoading && (
@@ -416,7 +490,7 @@ export default function MatchDetail({ matchId, onClose }) {
                 borderTop: '2px solid #818cf8', borderRadius: '50%',
                 animation: 'spin 1s linear infinite',
               }} />
-              Generating AI analysis…
+              Loading AI-agent analysis…
             </div>
           )}
 
@@ -424,66 +498,50 @@ export default function MatchDetail({ matchId, onClose }) {
             <p style={{ color: '#f87171', fontSize: '0.83rem', margin: 0 }}>⚠ {insightsError}</p>
           )}
 
-          {!insightsLoading && insights && !insights.available && (
+          {!insightsLoading && insights && aiResults.length === 0 && (
             <div style={{ color: '#94a3b8', fontSize: '0.83rem' }}>
-              <p style={{ margin: '0 0 6px' }}>🔑 {insights.error}</p>
+              <p style={{ margin: '0 0 6px' }}>No AI-agent insight is available for this match yet.</p>
               <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>
-                Add your Gemini API key in Admin → API Key Management to enable AI insights.
+                Upload JSON insights from the admin match form or add AI API keys.
               </p>
             </div>
           )}
 
-          {!insightsLoading && insights?.available && (
-            <div>
-              {insights.summary && (
-                <p style={{ color: '#c7d2fe', fontSize: '0.87rem', margin: '0 0 14px', lineHeight: 1.6 }}>
-                  {insights.summary}
-                </p>
-              )}
-
-              {insights.key_factors?.length > 0 && (
-                <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6366f1', marginBottom: 8, letterSpacing: '0.05em' }}>
-                    KEY FACTORS
+          {!insightsLoading && aiResults.length > 0 && (
+            <div style={{ display: 'grid', gap: 12 }}>
+              {aiResults.map(agent => (
+                <div key={agent.source} style={{ background: '#11182766', border: '1px solid #312e81', borderRadius: 12, padding: '12px 14px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+                    <strong style={{ color: '#e0e7ff', fontSize: '0.86rem' }}>{agent.label || agent.source}</strong>
+                    {agent.available && agent.risk_level && <span style={{ color: RISK_COLORS[agent.risk_level], fontSize: '0.72rem', fontWeight: 700 }}>{agent.risk_level} RISK</span>}
+                    {!agent.available && <span style={{ color: '#f87171', fontSize: '0.72rem', fontWeight: 700 }}>UNAVAILABLE</span>}
                   </div>
-                  <ul style={{ margin: 0, paddingLeft: 18, listStyle: 'none' }}>
-                    {insights.key_factors.map((f, i) => (
-                      <li key={i} style={{ color: '#a5b4fc', fontSize: '0.83rem', marginBottom: 5, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                        <span style={{ color: '#6366f1', flexShrink: 0, marginTop: 2 }}>▸</span>
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
+                  {agent.available ? (
+                    <>
+                      {agent.summary && <p style={{ color: '#c7d2fe', fontSize: '0.86rem', margin: '0 0 10px', lineHeight: 1.55 }}>{agent.summary}</p>}
+                      {agent.key_factors?.length > 0 && (
+                        <ul style={{ margin: '0 0 10px', paddingLeft: 18, listStyle: 'none' }}>
+                          {agent.key_factors.map((f, i) => (
+                            <li key={`${agent.source}-factor-${i}`} style={{ color: '#a5b4fc', fontSize: '0.82rem', marginBottom: 4, display: 'flex', gap: 8 }}>
+                              <span style={{ color: '#6366f1' }}>▸</span>{f}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {agent.value_assessment && <p style={{ color: '#c7d2fe', fontSize: '0.82rem', margin: '0 0 10px', lineHeight: 1.45 }}>{agent.value_assessment}</p>}
+                      {agent.insight_tags?.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          {agent.insight_tags.map((tag, i) => (
+                            <span key={`${agent.source}-tag-${i}`} style={{ background: '#1e1b4b', color: '#818cf8', fontSize: '0.73rem', fontWeight: 600, borderRadius: 99, padding: '3px 9px', border: '1px solid #312e81' }}>{tag}</span>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <p style={{ color: '#94a3b8', fontSize: '0.82rem', margin: 0 }}>{agent.error || 'No insight available'}</p>
+                  )}
                 </div>
-              )}
-
-              {insights.value_assessment && (
-                <div style={{
-                  background: '#1e1b4b', borderRadius: 10, padding: '10px 14px',
-                  border: '1px solid #312e81', marginBottom: 14,
-                }}>
-                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#6366f1', marginBottom: 4, letterSpacing: '0.05em' }}>
-                    VALUE ASSESSMENT
-                  </div>
-                  <p style={{ color: '#c7d2fe', fontSize: '0.83rem', margin: 0, lineHeight: 1.5 }}>
-                    {insights.value_assessment}
-                  </p>
-                </div>
-              )}
-
-              {insights.insight_tags?.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {insights.insight_tags.map((tag, i) => (
-                    <span key={i} style={{
-                      background: '#1e1b4b', color: '#818cf8', fontSize: '0.75rem',
-                      fontWeight: 600, borderRadius: 99, padding: '3px 10px',
-                      border: '1px solid #312e81',
-                    }}>
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
+              ))}
             </div>
           )}
         </div>

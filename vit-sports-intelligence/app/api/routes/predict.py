@@ -395,6 +395,7 @@ async def get_match_insights(
     """
     from app.db.models import Match, Prediction
     from app.services.gemini_insights import generate_match_insights
+    from app.services.insight_store import load_match_insights
 
     match_row = await db.execute(select(Match).where(Match.id == match_id))
     match = match_row.scalar_one_or_none()
@@ -405,6 +406,18 @@ async def get_match_insights(
     pred = pred_row.scalar_one_or_none()
     if not pred:
         raise HTTPException(status_code=404, detail="Prediction not found")
+
+    cached = load_match_insights(
+        match_id,
+        defaults={
+            "home_prob": pred.home_prob or 0.33,
+            "draw_prob": pred.draw_prob or 0.33,
+            "away_prob": pred.away_prob or 0.33,
+            "confidence": pred.confidence if isinstance(pred.confidence, float) else 0.5,
+        },
+    )
+    if cached.get("gemini"):
+        return {"match_id": match_id, **cached["gemini"]}
 
     insights = await generate_match_insights(
         home_team=match.home_team,
