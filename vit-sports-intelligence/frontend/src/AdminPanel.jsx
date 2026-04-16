@@ -1,6 +1,6 @@
 // frontend/src/AdminPanel.jsx
-// VIT Sports Intelligence — v2.2.0
-// Sections: Model Status | Data Sources | Manual Match | CSV Upload | Predictions
+// VIT Sports Intelligence — v3.1.0 Admin Panel Redesign
+// Tabbed dashboard with improved health indicators and cleaner UX
 
 import { useEffect, useRef, useState } from 'react'
 import {
@@ -61,6 +61,54 @@ const badge = (color) => ({
   background: color === 'green' ? '#dcfce7' : color === 'red' ? '#fee2e2' : color === 'yellow' ? '#fef9c3' : '#f1f5f9',
   color:      color === 'green' ? '#15803d' : color === 'red' ? '#b91c1c' : color === 'yellow' ? '#92400e' : '#64748b',
 })
+
+// ── Health indicator component ────────────────────────────────────────
+function HealthIndicator({ label, status, message }) {
+  const colors = {
+    healthy: 'green',
+    degraded: 'yellow',
+    down: 'red',
+    unknown: 'gray'
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+      <span style={badge(colors[status] || 'gray')}>
+        {status === 'healthy' ? '✓' : status === 'degraded' ? '⚠' : status === 'down' ? '✕' : '?'}
+      </span>
+      <div>
+        <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#0f172a' }}>{label}</div>
+        {message && <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{message}</div>}
+      </div>
+    </div>
+  )
+}
+
+// ── Tab navigation ───────────────────────────────────────────────────
+function TabNavigation({ tabs, activeTab, onTabChange }) {
+  return (
+    <div style={{ display: 'flex', gap: 2, marginBottom: 24, borderBottom: '1px solid #e2e8f0' }}>
+      {tabs.map(tab => (
+        <button
+          key={tab.id}
+          onClick={() => onTabChange(tab.id)}
+          style={{
+            padding: '12px 20px',
+            border: 'none',
+            borderBottom: activeTab === tab.id ? '2px solid #6366f1' : '2px solid transparent',
+            background: activeTab === tab.id ? '#f8fafc' : 'transparent',
+            color: activeTab === tab.id ? '#6366f1' : '#64748b',
+            fontWeight: activeTab === tab.id ? 700 : 500,
+            fontSize: '0.88rem',
+            cursor: 'pointer',
+            borderRadius: '8px 8px 0 0',
+          }}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  )
+}
 
 // ── Status badge helper ───────────────────────────────────────────────
 function SourceBadge({ status }) {
