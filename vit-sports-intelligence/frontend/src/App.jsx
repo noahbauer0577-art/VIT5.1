@@ -9,6 +9,11 @@ import TrainingPanel    from './TrainingPanel'
 import AnalyticsPanel   from './AnalyticsPanel'
 import OddsPanel        from './OddsPanel'
 import MatchDetail      from './MatchDetail'
+import ResponsiveNav from './components/ResponsiveNav'
+import { NAV_ITEMS } from './navConfig'
+import DashboardPage from './pages/DashboardPage'
+import PremiumMatchCard from './components/PremiumMatchCard'
+import { LoadingSpinner } from './components/LoadingStates'
 import './App.css'
 
 /* ── Constants ────────────────────────────────────────────────────── */
@@ -30,31 +35,6 @@ const LEAGUES = [
   { value: 'belgian_pro_league', label: 'Belgian Pro League' },
 ]
 
-const NAV_GROUPS = [
-  {
-    label: 'Predict',
-    items: [
-      { id: 'dashboard',   icon: '▤',  label: 'Dashboard' },
-      { id: 'picks',       icon: '★',  label: 'Picks' },
-      { id: 'accumulator', icon: '⊕',  label: 'Accumulators' },
-    ],
-  },
-  {
-    label: 'Market',
-    items: [
-      { id: 'odds',        icon: '◈',  label: 'Odds & Arbitrage' },
-      { id: 'analytics',   icon: '↗',  label: 'Analytics' },
-    ],
-  },
-  {
-    label: 'System',
-    items: [
-      { id: 'training',    icon: '◎',  label: 'Training' },
-      { id: 'admin',       icon: '⚙',  label: 'Admin' },
-    ],
-  },
-]
-
 const PAGE_META = {
   dashboard:   { title: 'Dashboard',        sub: 'Predict match outcomes and review recent analysis' },
   picks:       { title: 'Market Picks',     sub: 'Value bets identified by the ensemble' },
@@ -65,53 +45,8 @@ const PAGE_META = {
   admin:       { title: 'Admin',            sub: 'Data management and system configuration' },
 }
 
-/* ── PickCard component ───────────────────────────────────────────── */
-function PickCard({ pick, onOpen }) {
-  const edge = ((pick.edge || 0) * 100).toFixed(2)
-  const isCertified = pick.pick_type === 'certified'
-  const ts = new Date(pick.timestamp).toLocaleString('en-GB', {
-    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
-  })
-
-  return (
-    <div
-      className={`pick-card ${isCertified ? 'certified' : 'high-conf'}`}
-      onClick={() => onOpen(pick.match_id)}
-    >
-      <div className="pick-badge">
-        {isCertified ? '🏅 Certified Pick' : '⚡ High Confidence'}
-      </div>
-
-      <div className="pick-teams">
-        {pick.home_team} <span>vs</span> {pick.away_team}
-      </div>
-
-      <div className="pick-stats">
-        <span className="pick-chip blue">
-          {pick.bet_side?.toUpperCase()}
-        </span>
-        <span className="pick-chip accent">+{edge}% edge</span>
-        <span className="pick-chip">{pick.entry_odds?.toFixed(2)} odds</span>
-        <span className="pick-chip">{((pick.recommended_stake || 0) * 100).toFixed(1)}% stake</span>
-      </div>
-
-      <div className="pick-models">
-        <span className="pick-chip">{pick.num_models} models</span>
-        <span className="pick-chip">{pick.model_agreement_pct}% agree</span>
-        <span className="pick-chip">{((pick.avg_1x2_confidence || 0) * 100).toFixed(0)}% conf.</span>
-      </div>
-
-      <div className="pick-footer">
-        <span>{ts}</span>
-        <span className="pick-footer-link">View detail →</span>
-      </div>
-    </div>
-  )
-}
-
 /* ── Main App ─────────────────────────────────────────────────────── */
-export default function App() {
-  const [tab, setTab]              = useState('dashboard')
+export detab, setTab]              = useState('dashboard')
   const [sidebarOpen, setSidebar]  = useState(false)
   const [health, setHealth]        = useState(null)
   const [history, setHistory]      = useState([])
@@ -135,13 +70,6 @@ export default function App() {
   const PER_PAGE = 10
 
   /* Market odds are fetched from OddsPanel instead of manual entry */
-
-  /* Auto-close sidebar on desktop resize */
-  useEffect(() => {
-    const handler = () => { if (window.innerWidth > 768) setSidebar(false) }
-    window.addEventListener('resize', handler)
-    return () => window.removeEventListener('resize', handler)
-  }, [])
 
   useEffect(() => {
     pollHealth()
@@ -253,97 +181,29 @@ export default function App() {
   const meta = PAGE_META[tab] || {}
 
   return (
-    <div className="app-shell">
       {/* ── Match detail modal ─────────────────────────────────── */}
-      {matchId && <MatchDetail matchId={matchId} onClose={() => setMatchId(null)} />}
+      <ResponsiveNav items={NAV_ITEMS} activeId={tab} onNavigate={navigate} branding="VIT Predict" />
 
-      {/* ── Mobile topbar ──────────────────────────────────────── */}
-      <header className="topbar">
-        <button
-          className="hamburger"
-          onClick={() => setSidebar(s => !s)}
-          aria-label="Toggle navigation"
-        >
-          <span /><span /><span />
-        </button>
-        <div className="topbar-brand">
-          <div className="brand-icon">⚽</div>
-          <span>VIT Predict</span>
-        </div>
-        <input
-          className="topbar-key"
-          type="password"
-          placeholder="Admin key"
-          value={adminKey}
-          onChange={(e) => { setAdminKey(e.target.value); setApiKey(e.target.value) }}
-          aria-label="Admin API key"
-        />
-        <div style={{ display:'flex', gap:6 }}>
-          <div className={`status-dot ${online ? 'dot-green' : 'dot-red'}`} style={{ width:8, height:8 }} />
-        </div>
-      </header>
+      {/* ── Main content ───────────────────────────────────────── */}
+      <main className="main-content">
 
-      {/* ── Sidebar overlay (mobile) ───────────────────────────── */}
-      {sidebarOpen && (
-        <div className="sidebar-overlay visible" onClick={() => setSidebar(false)} />
-      )}
-
-      {/* ── Sidebar ────────────────────────────────────────────── */}
-      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
-        {/* Close btn (mobile only) */}
-        <button
-          className="sidebar-close-btn"
-          onClick={() => setSidebar(false)}
-          aria-label="Close menu"
-        >✕</button>
-
-        {/* Brand */}
-        <div className="sidebar-brand">
-          <div className="brand-icon">⚽</div>
-          <div className="brand-text">
-            <div className="brand-name">VIT Predict</div>
-            <div className="brand-sub">12-Model Ensemble</div>
-          </div>
-        </div>
-
-        {/* Live status */}
-        <div className="sidebar-status">
-          <div className="status-row">
-            <div className={`status-dot ${online ? 'dot-green' : 'dot-red'}`} />
-            <span>API <b>{online ? 'Online' : 'Offline'}</b></span>
-          </div>
-          <div className="status-row">
-            <div className={`status-dot ${modelsOk ? 'dot-green' : 'dot-yellow'}`} />
-            <span>Models <b>{health?.models_loaded ?? '…'}/12</b></span>
-          </div>
-          <div className="status-row">
-            <div className={`status-dot ${dbOk ? 'dot-green' : 'dot-red'}`} />
-            <span>Database <b>{dbOk ? 'Connected' : 'Disconnected'}</b></span>
-          </div>
-        </div>
-
-        {/* Nav */}
-        <nav className="sidebar-nav">
-          {NAV_GROUPS.map(g => (
-            <div key={g.label}>
-              <div className="nav-group-label">{g.label}</div>
-              {g.items.map(item => (
-                <button
-                  key={item.id}
-                  className={`nav-btn ${tab === item.id ? 'active' : ''}`}
-                  onClick={() => navigate(item.id)}
-                >
-                  <span className="nav-icon">{item.icon}</span>
-                  {item.label}
-                </button>
-              ))}
+        {/* Admin key and status */}
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', background: '#f9fafb' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <input
+              type="password"
+              placeholder="Admin key"
+              value={adminKey}
+              onChange={(e) => { setAdminKey(e.target.value); setApiKey(e.target.value) }}
+              style={{ padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: '0.9rem' }}
+              aria-label="Admin API key"
+            />
+            <div style={{ display:'flex', gap:6, alignItems: 'center' }}>
+              <div className={`status-dot ${online ? 'dot-green' : 'dot-red'}`} style={{ width:8, height:8 }} />
+              <span style={{ fontSize: '0.9rem', color: '#6b7280' }}>API {online ? 'Online' : 'Offline'}</span>
             </div>
-          ))}
-        </nav>
-
-        <div className="sidebar-footer">v3.0.0 · VIT Sports Intelligence</div>
-      </aside>
-
+          </div>
+        </div
       {/* ── Main content ───────────────────────────────────────── */}
       <main className="main-content">
 
@@ -356,10 +216,9 @@ export default function App() {
         </div>
 
         {/* ════ DASHBOARD ════════════════════════════════════════ */}
-        {tab === 'dashboard' && (
-          <div className="fade-up">
-            {/* Stats bar */}
-            <div className="stats-grid">
+        {tab === 'dashboard' && <DashboardPage />}
+
+        {/* ════ PICKS ════════════════════════════════════════════ */}
               <div className="stat-tile blue">
                 <div className="stat-label">Total Predictions</div>
                 <div className="stat-value blue">{history.length}</div>
@@ -629,7 +488,7 @@ export default function App() {
                 {picksLoading ? '⟳ Loading…' : '↺ Refresh Picks'}
               </button>
             </div>
-
+LoadingSpinner /
             {picksLoading && <div className="empty-state"><p>Loading picks…</p></div>}
 
             {picks && !picksLoading && (
@@ -642,7 +501,7 @@ export default function App() {
                     </div>
                     <div className="picks-grid">
                       {picks.certified_picks.map(p => (
-                        <PickCard key={p.match_id} pick={p} onOpen={setMatchId} />
+                        <PremiumMatchCard key={p.match_id} match={p} onSelect={setMatchId} />
                       ))}
                     </div>
                   </div>
@@ -656,7 +515,7 @@ export default function App() {
                     </div>
                     <div className="picks-grid">
                       {picks.high_confidence_picks.map(p => (
-                        <PickCard key={p.match_id} pick={p} onOpen={setMatchId} />
+                        <PremiumMatchCard key={p.match_id} match={p} onSelect={setMatchId} />
                       ))}
                     </div>
                   </div>

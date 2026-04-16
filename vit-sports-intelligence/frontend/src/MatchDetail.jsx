@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
 import { fetchMatchDetail, fetchMultiAIInsights, uploadMatchInsights, getApiKey } from './api'
+import PremiumModal from './components/PremiumModal'
+import AIInsightComparison from './components/AIInsightComparison'
+import { LoadingSpinner, ErrorState } from './components/LoadingStates'
 
 const MARKET_LABELS = {
   1: '1X2',
@@ -173,20 +176,20 @@ export default function MatchDetail({ matchId, onClose }) {
   }
 
   if (loading) return (
-    <div className="detail-overlay" onClick={onClose}>
-      <div className="detail-modal" onClick={e => e.stopPropagation()}>
-        <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>Loading match details…</div>
-      </div>
-    </div>
+    <PremiumModal isOpen={true} onClose={onClose} title="Loading Match Details">
+      <LoadingSpinner />
+    </PremiumModal>
   )
 
   if (error) return (
-    <div className="detail-overlay" onClick={onClose}>
-      <div className="detail-modal" onClick={e => e.stopPropagation()}>
-        <div style={{ padding: 40, textAlign: 'center', color: '#ef4444' }}>{error}</div>
-        <button onClick={onClose} className="secondary-button" style={{ margin: '0 auto 20px', display: 'block' }}>Close</button>
-      </div>
-    </div>
+    <PremiumModal isOpen={true} onClose={onClose} title="Error Loading Match">
+      <ErrorState
+        icon="⚠️"
+        title="Failed to Load Match"
+        message={error}
+        onRetry={() => { setLoading(true); setError(''); fetchMatchDetail(matchId).then(setDetail).catch(e => setError(e.message)).finally(() => setLoading(false)) }}
+      />
+    </PremiumModal>
   )
 
   if (!detail) return null
@@ -205,9 +208,12 @@ export default function MatchDetail({ matchId, onClose }) {
   const aiResults = insights?.results ? Object.values(insights.results) : []
 
   return (
-    <div className="detail-overlay" onClick={onClose}>
-      <div className="detail-modal" onClick={e => e.stopPropagation()}>
-        <button className="detail-close" onClick={onClose}>✕</button>
+    <PremiumModal
+      isOpen={true}
+      onClose={onClose}
+      title={`${match.home_team} vs ${match.away_team}`}
+      size="lg"
+    >
 
         {/* Match Header */}
         <div className="detail-header">
@@ -498,55 +504,12 @@ export default function MatchDetail({ matchId, onClose }) {
             <p style={{ color: '#f87171', fontSize: '0.83rem', margin: 0 }}>⚠ {insightsError}</p>
           )}
 
-          {!insightsLoading && insights && aiResults.length === 0 && (
-            <div style={{ color: '#94a3b8', fontSize: '0.83rem' }}>
-              <p style={{ margin: '0 0 6px' }}>No AI-agent insight is available for this match yet.</p>
-              <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748b' }}>
-                Upload JSON insights from the admin match form or add AI API keys.
-              </p>
-            </div>
-          )}
-
-          {!insightsLoading && aiResults.length > 0 && (
-            <div style={{ display: 'grid', gap: 12 }}>
-              {aiResults.map(agent => (
-                <div key={agent.source} style={{ background: '#11182766', border: '1px solid #312e81', borderRadius: 12, padding: '12px 14px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
-                    <strong style={{ color: '#e0e7ff', fontSize: '0.86rem' }}>{agent.label || agent.source}</strong>
-                    {agent.available && agent.risk_level && <span style={{ color: RISK_COLORS[agent.risk_level], fontSize: '0.72rem', fontWeight: 700 }}>{agent.risk_level} RISK</span>}
-                    {!agent.available && <span style={{ color: '#f87171', fontSize: '0.72rem', fontWeight: 700 }}>UNAVAILABLE</span>}
-                  </div>
-                  {agent.available ? (
-                    <>
-                      {agent.summary && <p style={{ color: '#c7d2fe', fontSize: '0.86rem', margin: '0 0 10px', lineHeight: 1.55 }}>{agent.summary}</p>}
-                      {agent.key_factors?.length > 0 && (
-                        <ul style={{ margin: '0 0 10px', paddingLeft: 18, listStyle: 'none' }}>
-                          {agent.key_factors.map((f, i) => (
-                            <li key={`${agent.source}-factor-${i}`} style={{ color: '#a5b4fc', fontSize: '0.82rem', marginBottom: 4, display: 'flex', gap: 8 }}>
-                              <span style={{ color: '#6366f1' }}>▸</span>{f}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                      {agent.value_assessment && <p style={{ color: '#c7d2fe', fontSize: '0.82rem', margin: '0 0 10px', lineHeight: 1.45 }}>{agent.value_assessment}</p>}
-                      {agent.insight_tags?.length > 0 && (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                          {agent.insight_tags.map((tag, i) => (
-                            <span key={`${agent.source}-tag-${i}`} style={{ background: '#1e1b4b', color: '#818cf8', fontSize: '0.73rem', fontWeight: 600, borderRadius: 99, padding: '3px 9px', border: '1px solid #312e81' }}>{tag}</span>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <p style={{ color: '#94a3b8', fontSize: '0.82rem', margin: 0 }}>{agent.error || 'No insight available'}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+          <AIInsightComparison matchId={matchId} insights={insights?.results} isLoading={insightsLoading} onRefresh={() => loadInsights(matchId)} />
         </div>
 
       </div>
     </div>
   )
 }
+PremiumModal>
+  
